@@ -105,7 +105,7 @@ begin
 
     if not table_exists then
         execute format('create table %s as table %s', tablename, stage_table);
-        execute format('create index on %s using GIN (dimensions jsonb_path_ops)', tablename);
+        -- execute format('create index on %s using GIN (dimensions jsonb_path_ops)', tablename);
         return;
     end if;
 
@@ -113,15 +113,29 @@ begin
     execute 'with merge as (update ' || tablename || ' as dest
 	                        set histogram = aggregate_arrays(dest.histogram, src.histogram)
 	                        from ' || stage_table || ' as src
-                            where dest.dimensions = src.dimensions
+                            where dest.metric = src.metric and
+                                  dest.label = src.label and
+                                  dest.application = src.application and
+                                  dest.architecture = src.architecture and
+                                  dest.os = src.os and
+                                  dest.os_version = src.os_version and
+                                  dest.e10s_enabled = src.e10s_enabled and
+                                  dest.child = src.child
                             returning dest.*)
                   delete from ' || stage_table || ' as stage
                   using merge
-                  where stage.dimensions = merge.dimensions';
+                  where stage.metric = merge.metric and
+                        stage.label = merge.label and
+                        stage.application = merge.application and
+                        stage.architecture = merge.architecture and
+                        stage.os = merge.os and
+                        stage.os_version = merge.os_version and
+                        stage.e10s_enabled = merge.e10s_enabled and
+                        stage.child = merge.child';
 
     -- Insert new tuples
-    execute 'insert into ' || tablename || ' (dimensions, histogram)
-             select dimensions, histogram from ' || stage_table;
+    execute 'insert into ' || tablename || ' (metric, label, application, architecture, os, os_version, e10s_enabled, child, histogram)
+             select * from ' || stage_table;
 end
 $$ language plpgsql strict;
 
@@ -149,7 +163,7 @@ declare
     tablename text;
 begin
     tablename := aggregate_table_name('staging_' || prefix, channel, version, date);
-    execute 'create temporary table ' || tablename || ' (dimensions jsonb, histogram bigint[]) on commit drop';
+    execute 'create temporary table ' || tablename || ' (metric text, label text, application text, architecture text, os text, os_version text, e10s_enabled boolean, child boolean, histogram bigint[]) on commit drop';
     return tablename;
 end
 $$ language plpgsql strict;
@@ -186,21 +200,24 @@ $$ language plpgsql strict;
 create or replace function get_metric(prefix text, channel text, version text, date text, dimensions jsonb) returns table(label text, histogram bigint[]) as $$
 declare
     tablename text;
+    filters text;
 begin
+    tablename := aggregate_table_name(prefix, channel, version, date);
+
     if not dimensions ? 'metric' then
         raise exception 'Missing metric field!';
     end if;
 
-    tablename := aggregate_table_name(prefix, channel, version, date);
+
+    filters := format(E'metric = \'%s\'', dimensions::jsonb->>'metric');
 
     return query execute
-    E'select dimensions->>\'label\', aggregate_histograms(histogram)
-        from ' || tablename || E'
-        where dimensions @> $1
-        group by dimensions->>\'label\''
-        using dimensions;
+    E'select label, aggregate_histograms(histogram)
+      from ' || tablename || E'
+      where ' || filters || '
+      group by label';
 end
-$$ language plpgsql strict immutable;
+$$ language plpgsql strict;
 
 
 drop type if exists metric_type;
@@ -272,14 +289,12 @@ def _get_complete_histogram(channel, metric, values):
     return map(long, list(histogram))
 
 
+def escape(str):
+    return str.replace("\\", "\\\\")
+
 def _upsert_aggregate(stage_table, aggregate):
     key, metrics = aggregate
     submission_date, channel, version, application, architecture, os, os_version, e10s = key[:3] + key[-5:]
-    dimensions = {"application": application,
-                  "architecture": architecture,
-                  "os": os,
-                  "osVersion": os_version,
-                  "e10sEnabled": e10s}
 
     for metric, payload in metrics.iteritems():
         metric, label, child = metric
@@ -289,17 +304,15 @@ def _upsert_aggregate(stage_table, aggregate):
         except KeyError:  # TODO: ignore expired histograms
             continue
 
-        dimensions["metric"] = metric
-        dimensions["label"] = label
-        dimensions["child"] = child
-
-        json_dimensions = json.dumps(dimensions)
-        # json.dumps takes care of properly escaping the text but a SQL command
-        # will first be interpreted as a string literal before being executed.
-        # This doubles the number of backslashes we need.
-        json_dimensions = json_dimensions.replace("\\", "\\\\")
-
-        stage_table.write("{}\t{}\n".format(json_dimensions, "{" + json.dumps(histogram)[1:-1] + "}"))
+        stage_table.write("{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\n".format(escape(metric),
+                                                                        escape(label),
+                                                                        escape(application),
+                                                                        escape(architecture),
+                                                                        escape(os),
+                                                                        escape(os_version),
+                                                                        e10s,
+                                                                        child,
+                                                                        "{" + json.dumps(histogram)[1:-1] + "}"))
 
 
 def _upsert_build_id_aggregates(aggregates, dry_run=False):
@@ -324,7 +337,7 @@ def _upsert_build_id_aggregates(aggregates, dry_run=False):
         _upsert_aggregate(stage_table, aggregate)
 
     stage_table.seek(0)
-    cursor.copy_from(stage_table, stage_table_name, columns=("dimensions", "histogram"))
+    cursor.copy_from(stage_table, stage_table_name, columns=("metric", "label", "application", "architecture", "os", "os_version", "e10s_enabled", "child", "histogram"))
     cursor.execute("select merge_table(%s, %s, %s, %s, %s)", ('build_id', channel, version, build_id, stage_table_name))
 
     if dry_run:
@@ -352,7 +365,7 @@ def _upsert_submission_date_aggregates(aggregates, dry_run=False):
         _upsert_aggregate(stage_table, aggregate)
 
     stage_table.seek(0)
-    cursor.copy_from(stage_table, stage_table_name, columns=("dimensions", "histogram"))
+    cursor.copy_from(stage_table, stage_table_name, columns=("metric", "label", "application", "architecture", "os", "os_version", "e10s_enabled", "child", "histogram"))
     cursor.execute("select merge_table(%s, %s, %s, %s, %s)", ("submission_date", channel, version, submission_date, stage_table_name))
 
     if dry_run:

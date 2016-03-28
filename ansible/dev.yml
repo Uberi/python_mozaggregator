@@ -5,18 +5,97 @@
     - spark_version: 1.3.1
     - postgresql_version: 9.4
 
-  pre_tasks:
+  tasks:
     - name: install packages
       sudo: yes
       apt: name={{item}} state=installed update_cache=yes cache_valid_time=3600
       with_items:
-        - libpq-dev
-        - liblzma-dev
         - libsnappy-dev
-        - postgresql-{{postgresql_version}}
-        - postgresql-contrib-{{postgresql_version}}
+        - liblzma-dev
+        - openjdk-7-jdk
         - g++
         - redis-server
+        - python-numpy
+        - python-pandas
+        - python-scipy
+        - wget
+        - ca-certificates
+
+    - name: get the current release codename for adding apt repositories
+      shell: "lsb_release -cs"
+      register: codename
+
+    - name: add apt repository for postgresql
+      sudo: yes
+      apt_repository: repo="deb http://apt.postgresql.org/pub/repos/apt/ {{ codename.stdout }}-pgdg main" state=present
+
+    - name: trust the postgresql apt repository signing key
+      sudo: yes
+      apt_key: id=ACCC4CF8 url=https://www.postgresql.org/media/keys/ACCC4CF8.asc state=present
+
+    - name: install postgresql packages
+      sudo: yes
+      apt: name={{item}} state=installed update_cache=yes
+      with_items:
+        - libpq-dev
+        - postgresql-{{postgresql_version}}
+        - postgresql-contrib-{{postgresql_version}}
+        - postgresql-server-dev-{{postgresql_version}}
+
+    # we have to use wget here instead of the built in Ansible get_url module
+    # because Python versions before 2.7.9 don't support SNI, which is needed
+    # to verify the download via HTTPS, while wget does
+    - name: install anaconda
+      command: "{{item}} chdir={{ansible_env.HOME}} creates=miniconda2"
+      with_items:
+        - wget https://repo.continuum.io/miniconda/Miniconda-latest-Linux-x86_64.sh -O miniconda.sh
+        - chmod +x miniconda.sh
+        - ./miniconda.sh -b -f
+
+    - name: source anaconda
+      lineinfile: dest={{ansible_env.HOME}}/.bashrc regexp="^export.*miniconda2/bin" line="export PATH={{ansible_env.HOME}}/miniconda2/bin:$PATH"
+
+    - name: install common python packages
+      command: "{{item}} chdir={{ansible_env.HOME}}"
+      with_items:
+        - miniconda2/bin/conda update --yes conda
+        - miniconda2/bin/conda install --yes atlas numpy scipy matplotlib nose dateutil pandas flask supervisor tornado
+
+    - name: setup Python dependencies
+      pip: name={{item}} state=present executable={{ansible_env.HOME}}/miniconda2/bin/pip
+      with_items:
+        - telemetry-tools
+        - python_moztelemetry
+        - psycopg2
+        - awscli
+        - flask-cors
+        - flask-cache
+        - flask-sslify
+        - gevent
+        - psycogreen
+
+    # we have to use wget here instead of the built in Ansible get_url module
+    # because Python versions before 2.7.9 don't support SNI, which is needed
+    # to verify the download via HTTPS, while wget does
+    - name: get spark
+      command: "{{item}} chdir={{ansible_env.HOME}} creates=spark.tgz"
+      with_items:
+        - wget https://d3kbcqa49mib13.cloudfront.net/spark-{{spark_version}}-bin-hadoop2.4.tgz -O spark.tgz
+
+    - name: install spark
+      unarchive: src={{ansible_env.HOME}}/spark.tgz dest={{ansible_env.HOME}} copy=no
+
+    - name: source spark
+      lineinfile: >
+        dest={{ansible_env.HOME}}/.bashrc
+        regexp="^export SPARK_HOME"
+        line="export SPARK_HOME={{ansible_env.HOME}}/spark-{{spark_version}}-bin-hadoop2.4"
+
+    - name: source pyspark
+      lineinfile: >
+        dest={{ansible_env.HOME}}/.bashrc
+        regexp="^export PYTHONPATH"
+        line="export PYTHONPATH=$SPARK_HOME/python:$SPARK_HOME/python/lib/py4j-0.8.2.1-src.zip"
 
     - name: stop postgres service
       sudo: yes
@@ -25,16 +104,5 @@
     - name: configure postgresql
       lineinfile: dest={{ansible_env.HOME}}/.bashrc regexp="^export.*postgresql" line="export PATH=/usr/lib/postgresql/{{postgresql_version}}/bin:$PATH"
 
-  roles:
-    - anaconda
-    - role: spark
-      spark_version: "{{spark_version}}"
-
-  post_tasks:
-    - name: setup project dependencies on vagrant
-      command: "{{ansible_env.HOME}}/miniconda2/bin/python setup.py develop chdir=/vagrant"
-      when: not travis_build_dir is defined
-
-    - name: setup project dependencies on travis
-      command: "{{ansible_env.HOME}}/miniconda2/bin/python setup.py develop chdir={{travis_build_dir}}"
-      when: travis_build_dir is defined
+    - name: configure postgresql language settings
+      lineinfile: dest={{ansible_env.HOME}}/.bashrc regexp="^export\s+LC_CTYPE" line="export LC_CTYPE=en_US.UTF-8"

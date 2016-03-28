@@ -3,11 +3,6 @@ Aggregator job for Telemetry. See this [blog](http://robertovitillo.com/2015/07/
 
 ## Development and deployment
 
-To reconfigure the project:
-```
-ansible-playbook ansible/configure.yml -e '@ansible/envs/dev.yml' -i ansible/inventory
-```
-
 To start hacking on your local machine:
 ```bash
 vagrant up
@@ -24,6 +19,8 @@ To deploy a new version of the aggregation service to the cloud:
 ```bash
 ansible-playbook ansible/deploy.yml -e '@ansible/envs/dev.yml' -i ansible/inventory
 ```
+
+To connect to the database on the host, when running it inside the Vagrant VM, using something like [pgAdmin](http://pgadmin.org/), use `localhost` as the host, `5432` as the port, `vagrant` as the username, and a blank password.
 
 ## API
 Aggregates are made available through a HTTP API. There are two kinds of aggregates: per submission date and per build-id. 

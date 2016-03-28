@@ -12,5 +12,5 @@ install: # set up the environment
   - sudo ansible-playbook -i ansible/inventory/localhost.ini ansible/dev.yml
 script: # run the tests
   - export SPARK_HOME=$(echo ~/spark-*)
-  - export PYSPARK_PYTHON=~/miniconda2/bin/python
+  - export PYSPARK_PYTHON=~/miniconda2/bin/python # tell Spark which Python executable we're using (this only seems to be necessary for TravisCI, not anywhere else)
   - ./run-tests.sh

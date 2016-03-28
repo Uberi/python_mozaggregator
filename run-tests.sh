@@ -41,15 +41,16 @@ wait_for_line () {
 
 trap clean_exit EXIT # run clean_exit() when bash exits
 
+PGSQL_DATA=$(mktemp -d /tmp/PGSQL-XXXXX) # temp dir for database storage, and the database output FIFO
+PGSQL_PATH=$(pg_config --bindir) # PostgreSQL binaries path
+
 # make sure we have everything we need to run
-check_for_cmd postgres
-check_for_cmd pg_config
+check_for_cmd ${PGSQL_PATH}/initdb
+check_for_cmd ${PGSQL_PATH}/postgres
 check_for_cmd python
 check_for_cmd nosetests
 
 # start a PostgreSQL database server in the background with a new database
-PGSQL_DATA=$(mktemp -d /tmp/PGSQL-XXXXX) # temp dir for database storage, and output FIFO
-PGSQL_PATH=$(pg_config --bindir) # PostgreSQL binaries path
 ${PGSQL_PATH}/initdb ${PGSQL_DATA} # initialize the database
 echo "host all all 0.0.0.0/0 trust" >> $PGSQL_DATA/pg_hba.conf # allow anyone to access the database
 mkfifo ${PGSQL_DATA}/out # create output FIFO for the database to let us read the output programmatically

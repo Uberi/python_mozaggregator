@@ -47,7 +47,7 @@ PGSQL_PATH=$(pg_config --bindir) # PostgreSQL binaries path
 # make sure we have everything we need to run
 check_for_cmd ${PGSQL_PATH}/initdb
 check_for_cmd ${PGSQL_PATH}/postgres
-check_for_cmd python
+check_for_cmd ~/miniconda2/bin/python
 check_for_cmd nosetests
 
 # start a PostgreSQL database server in the background with a new database
@@ -59,7 +59,7 @@ wait_for_line "database system is ready to accept connections" ${PGSQL_DATA}/out
 
 # launch the HTTP API service in the background
 mkfifo ${PGSQL_DATA}/out_service
-(python ./mozaggregator/service.py -d 2>&1 | tee ${PGSQL_DATA}/out_service &)
+(~/miniconda2/bin/python ./mozaggregator/service.py -d 2>&1 | tee ${PGSQL_DATA}/out_service &)
 wait_for_line "* Running " ${PGSQL_DATA}/out_service
 
-nosetests ./tests/
+~/miniconda2/bin/python "$(which nosetests)" ./tests/

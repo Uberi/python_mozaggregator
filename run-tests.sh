@@ -54,12 +54,12 @@ check_for_cmd nosetests
 ${PGSQL_PATH}/initdb ${PGSQL_DATA} # initialize the database
 echo "host all all 0.0.0.0/0 trust" >> $PGSQL_DATA/pg_hba.conf # allow anyone to access the database
 mkfifo ${PGSQL_DATA}/out # create output FIFO for the database to let us read the output programmatically
-${PGSQL_PATH}/postgres -h '*' -F -k ${PGSQL_DATA} -D ${PGSQL_DATA} &> ${PGSQL_DATA}/out & # start the database server
+(${PGSQL_PATH}/postgres -h '*' -F -k ${PGSQL_DATA} -D ${PGSQL_DATA} 2>&1 | tee ${PGSQL_DATA}/out &) # start the database server
 wait_for_line "database system is ready to accept connections" ${PGSQL_DATA}/out # wait for PostgreSQL to start listening for connections
 
 # launch the HTTP API service in the background
 mkfifo ${PGSQL_DATA}/out_service
-python ./mozaggregator/service.py -d &> ${PGSQL_DATA}/out_service &
+(python ./mozaggregator/service.py -d 2>&1 | tee ${PGSQL_DATA}/out_service &)
 wait_for_line "* Running " ${PGSQL_DATA}/out_service
 
 nosetests ./tests/

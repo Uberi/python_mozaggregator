@@ -5,7 +5,7 @@
     - spark_version: 1.3.1
     - postgresql_version: 9.4
 
-  tasks:
+  pre_tasks:
     - name: install packages
       sudo: yes
       apt: name={{item}} state=installed update_cache=yes cache_valid_time=3600
@@ -61,21 +61,6 @@
         - miniconda2/bin/conda update --yes conda
         - miniconda2/bin/conda install --yes atlas numpy scipy matplotlib nose dateutil pandas flask supervisor tornado
 
-    - name: setup Python dependencies
-      pip: name={{item}} state=present executable={{ansible_env.HOME}}/miniconda2/bin/pip
-      with_items:
-        - telemetry-tools
-        - python_moztelemetry
-        - psycopg2
-        - awscli
-        - flask-cors
-        - flask-cache
-        - flask-sslify
-        - gevent
-        - psycogreen
-        - ujson
-        - nose
-
     # we have to use wget here instead of the built in Ansible get_url module
     # because Python versions before 2.7.9 don't support SNI, which is needed
     # to verify the download via HTTPS, while wget does
@@ -108,3 +93,14 @@
 
     - name: configure postgresql language settings
       lineinfile: dest={{ansible_env.HOME}}/.bashrc regexp="^export\s+LC_CTYPE" line="export LC_CTYPE=en_US.UTF-8"
+
+  post_tasks:
+    # travis_build_dir can be set on the command line with Ansible's `-e` flag
+
+    - name: setup project dependencies on Vagrant
+      pip: name=/vagrant state=present executable={{ansible_env.HOME}}/miniconda2/bin/pip
+      when: not travis_build_dir is defined
+
+    - name: setup project dependencies on TravisCI
+      pip: name={{travis_build_dir}} state=present executable={{ansible_env.HOME}}/miniconda2/bin/pip
+      when: travis_build_dir is defined

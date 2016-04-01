@@ -23,7 +23,7 @@ ansible-playbook ansible/deploy.yml -e '@ansible/envs/dev.yml' -i ansible/invent
 To connect to the database on the host, when running it inside the Vagrant VM, using something like [pgAdmin](http://pgadmin.org/), use `localhost` as the host, `5432` as the port, `vagrant` as the username, and a blank password.
 
 ## API
-Aggregates are made available through a HTTP API. There are two kinds of aggregates: per submission date (date a ping is submitted) and per build-id (date the submitting product was built).
+Aggregates are made available through a HTTP API. There are two kinds of aggregates: per submission date (date a ping is received by the server) and per build-id (date the submitting product was built).
 
 To access the aggregates use the ```aggregates_by/build_id/``` and ```aggregates_by/submission_date/``` prefix respectively.
 

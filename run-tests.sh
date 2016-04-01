@@ -2,8 +2,8 @@
 set -e
 
 if [ -z "$SPARK_HOME" ]; then
-	echo 'You need to set $SPARK_HOME to run these tests.' >&2
-	exit 1
+    echo 'You need to set $SPARK_HOME to run these tests.' >&2
+    exit 1
 fi
 
 # make sure pyspark, py4j, and mozaggregator are importable
@@ -15,28 +15,28 @@ export PYTHONPATH=$PYTHONPATH:$SPARK_HOME/python:$PYFORJ:.
 export DB_TEST_URL="dbname=postgres user=$USER host=127.0.0.1"
 
 clean_exit() {
-	local error_code="$?" # save the original error code
-	for job in $(jobs -p); do
-		pkill -9 -P $job >/dev/null 2>&1 || true
-		kill -9 $job >/dev/null 2>&1 || true
-	done
-	rm -rf "PGSQL_DATA"
-	return $error_code
+    local error_code="$?" # save the original error code
+    for job in $(jobs -p); do
+        pkill -9 -P $job >/dev/null 2>&1 || true
+        kill -9 $job >/dev/null 2>&1 || true
+    done
+    rm -rf "PGSQL_DATA"
+    return $error_code
 }
 
 check_for_cmd () {
-	which "$1" >/dev/null 2>/dev/null || {
-		echo "Could not find '$1' command" >&2
-		exit 1
-	}
+    which "$1" >/dev/null 2>/dev/null || {
+        echo "Could not find '$1' command" >&2
+        exit 1
+    }
 }
 
 wait_for_line () {
-	echo "Waiting for '$1' to appear in file '$2'..."
-	timeout 20 grep -q "$1" < "$2" || {
-		echo "ERROR: waiting for '$1' to appear in file '$2' timed out" >&2
-		exit 1
-	}
+    echo "Waiting for '$1' to appear in file '$2'..."
+    timeout 20 grep -q "$1" < "$2" || {
+        echo "ERROR: waiting for '$1' to appear in file '$2' timed out" >&2
+        exit 1
+    }
 }
 
 trap clean_exit EXIT # run clean_exit() when bash exits

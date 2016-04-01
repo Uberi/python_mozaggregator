@@ -7,6 +7,8 @@ if [ -z "$SPARK_HOME" ]; then
 fi
 
 # make sure pyspark, py4j, and mozaggregator are importable
+# mozaggregator needs to be imported from the current directory
+# this mainly is needed for TravisCI support
 PYFORJ=$(ls -1 $SPARK_HOME/python/lib/py4j-*-src.zip | head -1)
 export PYTHONPATH=$PYTHONPATH:$SPARK_HOME/python:$PYFORJ:.
 

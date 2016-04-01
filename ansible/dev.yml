@@ -12,7 +12,6 @@
       with_items:
         - libsnappy-dev
         - liblzma-dev
-        - openjdk-7-jdk
         - g++
         - redis-server
         - python-numpy
